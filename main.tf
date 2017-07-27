@@ -36,17 +36,23 @@ resource "openstack_networking_router_interface_v2" "router_interface_1" {
 }
 
 # Now add ssh public key so we can access the resource --// todo move public key to a variable
-resource "openstack_compute_keypair_v2" "test-keypair" {
-  name       = "my-keypair"
+resource "openstack_compute_keypair_v2" "bastion-keypair" {
+  name       = "bastion-keypair"
   public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDjb0RsR8ZtABGIRC/uzjZZClq2drvH58SiLgDQhU02+U3V1AKTAIk/SorCCYBgsFdypjhOoOODH8fzkCURzUqJIYwNEmGd9agQcT4IWiHux5voJxLH9lUstK4ZFZgglkwK0/40lUxq7jxJLcw+m1eMxfnp7mGel5eR5qi7lHY6DBIi2MkLPO3j5EgwCA6YI7xuMgYBqhOgigzZ0Yg89l9Pf6VwV+BAnUXM7Po9AKXe82k4y2faLHoBDfA8OUdqoZYiPgEE8diFt/fRc+7ZPFK9PrHX9pxTnrCW9XM0/cKG4ZM9ONvYKtoE/dL4mQEkVNNVd6K4Igo9ee6dGSW0yalixvlyn7nvp3e77x1Dkr1oXTIzASxEfJ4QUj8sUdv/aaE5q/h1rK+lih6FpkHNpFd9nVaV+byWiBPT9pEey0ukGc0hj7ET9BnZSAexIMXBI4eU+RsMwl+E8ls/xqdwIikhSNQeohSX2pNjnrxBFG9xxp9Ykh4KC2I1nJWDUZyj8Y0OvP7A63QL7hdKqlhdXsGvaDqJKiSaOJm5uNB5zDm3KYgslCuHiKoP1lJJ33xgWxAMSqIF4oLMX5vlB0l7JcYWmvr1idj9cfOh1C9P9rrtjsifr+3nhT03gtqi/zD2oR3wdn1LJOi/o5pc9KeKXEdgu3sQAii58SP3/NwMLsC4CQ=="
 }
 
+resource "openstack_compute_keypair_v2" "secret-keypair" {
+  name       = "secret-keypair"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCue01B/2Yzhz2y33HD3yn2dmid8Eh81jvUcwAv5dqyQODefqrR+znv9GxYdf43+Syy/Lz8XMVv1FNKdYKQ3SL9aPT4CL/by9cCF6hjOkqrGpCIxdI7q7aZpznlItcq+XyHqRHaab7Mj4GrU1SoWCpFiogU5Oxw0AvMb4fZyA7dsKr8adr6Ply1CZEsXbseSW5a7uAdpDidQn2jW7rFyxmi2uy/6y6aNzBqcz/zco8lk6nTdja0sAH44BzJK/fzrsNMlZrgSZRfy938mez7tfUmILr4zd07aQ3wSoToRJRn1yxJSBXOklXkJMLhnTGi8xj3a9wpVuH9t6SMP8m+7XoB"
+}
+
+
 # Now specify an image - using centos72 from openstack
 resource "openstack_compute_instance_v2" "basic" {
-  name            = "basic"
+  name            = "bastion"
   image_id        = "c09aceb5-edad-4392-bc78-197162847dd1"
   flavor_name       = "t1.tiny"
-  key_pair        = "${openstack_compute_keypair_v2.test-keypair.name}"
+  key_pair        = "${openstack_compute_keypair_v2.bastion-keypair.name}"
   security_groups = ["default", "${openstack_compute_secgroup_v2.secgroup_1.name}"]
 
   metadata {
@@ -69,6 +75,12 @@ resource "openstack_compute_secgroup_v2" "secgroup_1" {
     ip_protocol = "tcp"
     cidr        = "0.0.0.0/0"
   }
+}
+
+# Now declare security group with http ports open - 80 and 443
+resource "openstack_compute_secgroup_v2" "http_group" {
+  name        = "http_group"
+  description = "Http only group"
 
   rule {
     from_port   = 80
@@ -90,8 +102,49 @@ resource "openstack_networking_floatingip_v2" "floatip_1" {
   pool = "internet"
 }
 
+# Now acquire a public ip for our instance - here we specify 'internet' because that is the pool set up by UKCloud
+resource "openstack_networking_floatingip_v2" "floatip_2" {
+  pool = "internet"
+}
+
 # Now associate the public ip with our instance
 resource "openstack_compute_floatingip_associate_v2" "fip_1" {
   floating_ip = "${openstack_networking_floatingip_v2.floatip_1.address}"
   instance_id = "${openstack_compute_instance_v2.basic.id}"
+
+  	# This should upload the ssh private key from local config folder
+    provisioner "file" {
+    	source = "./config/secret-key.pem"
+    	destination = "/home/centos/.ssh/id_rsa"
+    	connection {
+    		host = "${openstack_networking_floatingip_v2.floatip_1.address}"
+    		user = "centos"
+    		timeout = "1m"
+    	}
+    }
+}
+
+# Now associate the public ip with our APIgateway instance
+resource "openstack_compute_floatingip_associate_v2" "fip_2" {
+  floating_ip = "${openstack_networking_floatingip_v2.floatip_2.address}"
+  instance_id = "${openstack_compute_instance_v2.w3_apigateway.id}"
+}
+
+# Now create API gateway instance
+
+# Now specify an image - using centos72 from openstack for API gateway
+resource "openstack_compute_instance_v2" "w3_apigateway" {
+  name            = "w3_apigateway"
+  image_id        = "c09aceb5-edad-4392-bc78-197162847dd1"
+  flavor_name       = "t1.tiny"
+  key_pair        = "${openstack_compute_keypair_v2.secret-keypair.name}"
+  security_groups = ["default", "${openstack_compute_secgroup_v2.http_group.name}"]
+
+  metadata {
+    this = "centos 72 base"
+  }
+
+  network {
+    name = "${openstack_networking_network_v2.network_1.name}"
+  }
 }
