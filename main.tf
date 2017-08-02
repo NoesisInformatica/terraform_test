@@ -1,19 +1,19 @@
 # Test example
 variable "external_gateway" {
-	default = "893a5b59-081a-4e3a-ac50-1e54e262c3fa"
+  default = "893a5b59-081a-4e3a-ac50-1e54e262c3fa"
 }
 
 variable "n3_gateway" {
-	default = "893a5b59-081a-4e3a-ac50-1e54e262c3fa"
+  default = "893a5b59-081a-4e3a-ac50-1e54e262c3fa"
 }
 
 variable "n3_ip_pool" {
-	default = "11.22.0.0/16"
+  default = "11.22.0.0/16"
 }
 
 # Configure the OpenStack Provider
 provider "openstack" {
-	# no need to define anything cos it gets pulled via the shell environments
+  # no need to define anything cos it gets pulled via the shell environments
 }
 
 # Define our network
@@ -73,6 +73,17 @@ resource "openstack_compute_instance_v2" "basic" {
 
   network {
     name = "${openstack_networking_network_v2.n3_network.0.name}"
+    fixed_ip_v4 = "11.22.10.10"
+  }
+
+  network {
+    name = "${openstack_networking_network_v2.n3_network.1.name}"
+    fixed_ip_v4 = "11.22.20.10"
+  }
+
+  network {
+    name = "${openstack_networking_network_v2.n3_network.2.name}"
+    fixed_ip_v4 = "11.22.30.10"
   }
 }
 
@@ -124,27 +135,66 @@ resource "openstack_compute_floatingip_associate_v2" "fip_1" {
   floating_ip = "${openstack_networking_floatingip_v2.floatip_1.address}"
   instance_id = "${openstack_compute_instance_v2.basic.id}"
 
-  	# This should upload the ssh private key from local config folder
+    # This should upload the ssh private key from local config folder
     provisioner "file" {
-    	source = "./config/secret-key.pem"
-    	destination = "/home/centos/.ssh/id_rsa"
-    	connection {
-    		host = "${openstack_networking_floatingip_v2.floatip_1.address}"
-    		user = "centos"
-    		timeout = "1m"
-    	}
+      source = "./config/secret-key.pem"
+      destination = "/home/centos/.ssh/id_rsa"
+      connection {
+        host = "${openstack_networking_floatingip_v2.floatip_1.address}"
+        user = "centos"
+        timeout = "1m"
+      }
+    }
+
+    # This should upload the ssh private key from local config folder
+    provisioner "remote-exec" {
+      inline = [
+        "sudo sh -c 'echo \"DEVICE=\"eth1\"\" > /etc/sysconfig/network-scripts/ifcfg-eth1'",
+        "sudo sh -c 'echo \"IPADDR=11.22.10.10\" >> /etc/sysconfig/network-scripts/ifcfg-eth1'",
+        "sudo sh -c 'echo \"NETMASK=255.255.255.0\"  >> /etc/sysconfig/network-scripts/ifcfg-eth1'",
+        "sudo sh -c 'echo \"BOOTPROTO=\"static\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth1'",
+        "sudo sh -c 'echo \"ONBOOT=\"yes\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth1'",
+        "sudo sh -c 'echo \"TYPE=\"Ethernet\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth1'",
+        "sudo sh -c 'echo \"USERCTL=\"no\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth1'",
+        "sudo sh -c 'echo \"IPV6INIT=\"no\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth1'",
+
+        "sudo sh -c 'echo \"DEVICE=\"eth2\"\" > /etc/sysconfig/network-scripts/ifcfg-eth2'",
+        "sudo sh -c 'echo \"IPADDR=11.22.20.10\" >> /etc/sysconfig/network-scripts/ifcfg-eth2'",
+        "sudo sh -c 'echo \"NETMASK=255.255.255.0\"  >> /etc/sysconfig/network-scripts/ifcfg-eth2'",
+        "sudo sh -c 'echo \"BOOTPROTO=\"static\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth2'",
+        "sudo sh -c 'echo \"ONBOOT=\"yes\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth2'",
+        "sudo sh -c 'echo \"TYPE=\"Ethernet\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth2'",
+        "sudo sh -c 'echo \"USERCTL=\"no\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth2'",
+        "sudo sh -c 'echo \"IPV6INIT=\"no\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth2'",
+
+        "sudo sh -c 'echo \"DEVICE=\"eth3\"\" > /etc/sysconfig/network-scripts/ifcfg-eth3'",
+        "sudo sh -c 'echo \"IPADDR=11.22.30.10\" >> /etc/sysconfig/network-scripts/ifcfg-eth3'",
+        "sudo sh -c 'echo \"NETMASK=255.255.255.0\"  >> /etc/sysconfig/network-scripts/ifcfg-eth3'",
+        "sudo sh -c 'echo \"BOOTPROTO=\"static\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth3'",
+        "sudo sh -c 'echo \"ONBOOT=\"yes\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth3'",
+        "sudo sh -c 'echo \"TYPE=\"Ethernet\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth3'",
+        "sudo sh -c 'echo \"USERCTL=\"no\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth3'",
+        "sudo sh -c 'echo \"IPV6INIT=\"no\"\"  >> /etc/sysconfig/network-scripts/ifcfg-eth3'",
+
+        "sudo sh -c 'service network restart'"
+      ]
+      connection {
+        host = "${openstack_networking_floatingip_v2.floatip_1.address}"
+        user = "centos"
+        timeout = "1m"
+      }
     }
 
     # set permissions on private key to 0600
     provisioner "remote-exec" {
-	    inline = [
-	      "chmod 0600 ~/.ssh/id_rsa"
-	    ]
-	    connection {
-    		host = "${openstack_networking_floatingip_v2.floatip_1.address}"
-    		user = "centos"
-    		timeout = "1m"
-    	}
+      inline = [
+        "chmod 0600 ~/.ssh/id_rsa"
+      ]
+      connection {
+        host = "${openstack_networking_floatingip_v2.floatip_1.address}"
+        user = "centos"
+        timeout = "1m"
+      }
   }
 }
 
@@ -221,10 +271,6 @@ resource "openstack_compute_instance_v2" "n3_apigateway" {
   network {
     name = "${openstack_networking_network_v2.n3_network.0.name}"
   }
-
-  network {
-    name = "${openstack_networking_network_v2.n3_network.1.name}"
-  }
 }
 
 # Get a public IP for N3 api gateway
@@ -240,6 +286,7 @@ resource "openstack_compute_floatingip_associate_v2" "n3_fip" {
 
 # Now create db server - using centos72 from openstack
 resource "openstack_compute_instance_v2" "db_server" {
+  depends_on = ["openstack_networking_network_v2.n3_network"]
   name            = "db_server"
   image_id        = "c09aceb5-edad-4392-bc78-197162847dd1"
   flavor_name       = "t1.tiny"
@@ -252,5 +299,23 @@ resource "openstack_compute_instance_v2" "db_server" {
 
   network {
     name = "${openstack_networking_network_v2.n3_network.1.name}"
+  }
+}
+
+# Now create db server - using centos72 from openstack
+resource "openstack_compute_instance_v2" "thinkhr" {
+  depends_on = ["openstack_networking_network_v2.n3_network"]
+  name            = "think_hr"
+  image_id        = "c09aceb5-edad-4392-bc78-197162847dd1"
+  flavor_name       = "t1.tiny"
+  key_pair        = "${openstack_compute_keypair_v2.secret-keypair.name}"
+  security_groups = ["default"]
+
+  metadata {
+    this = "centos 72 base"
+  }
+
+  network {
+    name = "${openstack_networking_network_v2.n3_network.2.name}"
   }
 }
