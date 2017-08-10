@@ -302,10 +302,10 @@ resource "openstack_compute_instance_v2" "db_server" {
   }
 }
 
-# Now create db server - using centos72 from openstack
-resource "openstack_compute_instance_v2" "thinkhr" {
+# Now create thinkehr server - using centos72 from openstack
+resource "openstack_compute_instance_v2" "thinkehr_server" {
   depends_on = ["openstack_networking_network_v2.n3_network"]
-  name            = "think_hr"
+  name            = "thinkehr_server"
   image_id        = "c09aceb5-edad-4392-bc78-197162847dd1"
   flavor_name       = "t1.tiny"
   key_pair        = "${openstack_compute_keypair_v2.secret-keypair.name}"
